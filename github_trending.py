@@ -21,6 +21,8 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import Header
+from io import BytesIO
+from email.generator import BytesGenerator
 
 try:
     import requests
@@ -72,7 +74,7 @@ HEADERS = {
 # =========================================================================
 # 1. 爬取 GitHub Trending
 # =========================================================================
-def fetch_trending(since="daily", max_retries=3):
+def fetch_trending(since="daily", max_retries=10):
     """
     爬取 GitHub Trending 页面，返回仓库列表。
 
@@ -243,7 +245,7 @@ def ai_summarize(repos, since_label):
     return repos
 
 
-def _call_ai_api(prompt, max_retries=3):
+def _call_ai_api(prompt, max_retries=10):
     """
     调用 GitHub Models API (OpenAI 兼容格式)。
 
@@ -434,23 +436,24 @@ def send_email(html_content):
     """通过 SMTP 发送 HTML 邮件。"""
     today = datetime.now().strftime("%Y-%m-%d")
     subject = "GitHub Trending 热点报告 - {}".format(today)
-
-    msg = MIMEMultipart("alternative")
     msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = MAIL_FROM
     msg["To"] = MAIL_TO
-
-    # 纯文本备选
     text_part = MIMEText("请使用支持 HTML 的邮件客户端查看此邮件。", "plain", "utf-8")
     html_part = MIMEText(html_content, "html", "utf-8")
     msg.attach(text_part)
     msg.attach(html_part)
+    # 用 BytesGenerator 安全序列化，避免 str/bytes 拼接错误
+    bio = BytesIO()
+    gen = BytesGenerator(bio)
+    gen.flatten(msg)
+    msg_bytes = bio.getvalue()
 
     try:
         logger.info("正在连接 SMTP 服务器 %s:%d ...", SMTP_SERVER, SMTP_PORT)
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_bytes())
+            server.sendmail(MAIL_FROM, [MAIL_TO], msg_bytes)
         logger.info("邮件发送成功！收件人: %s", MAIL_TO)
         return True
     except smtplib.SMTPAuthenticationError:
@@ -460,53 +463,77 @@ def send_email(html_content):
     except Exception as e:
         logger.error("邮件发送异常: %s", e)
 
-    return False
-
 
 # =========================================================================
 # 5. 主流程
 # =========================================================================
+def send_failure_notify(error_msg):
+    """当主流程失败时，发送一封简单的失败通知邮件。"""
+    try:
+        today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        msg = MIMEText(
+            "GitHub Trending Spider 运行失败\n\n"
+            "时间: {}\n"
+            "错误: {}\n\n"
+            "请检查服务器日志: /root/logs/github-python/trending.log".format(today, error_msg),
+            "plain", "utf-8"
+        )
+        msg["Subject"] = Header("[FAIL] GitHub Trending Spider - {}".format(today), "utf-8")
+        msg["From"] = MAIL_FROM
+        msg["To"] = MAIL_TO
+
+        bio = BytesIO()
+        gen = BytesGenerator(bio)
+        gen.flatten(msg)
+
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(MAIL_FROM, [MAIL_TO], bio.getvalue())
+        logger.info("失败通知邮件已发送")
+    except Exception as e:
+        logger.error("发送失败通知邮件也失败了: %s", e)
+
+
 def main():
     logger.info("=" * 60)
     logger.info("GitHub Trending Spider 启动 - %s", datetime.now().isoformat())
     logger.info("=" * 60)
 
+    errors = []
     # 爬取每日热点
     logger.info("--- 开始爬取每日热点 ---")
     daily_repos = fetch_trending(since="daily")
     logger.info("每日热点: 获取到 %d 个仓库", len(daily_repos))
+    if not daily_repos:
+        errors.append("爬取每日热点失败")
 
-    # 间隔一下避免被限流
     time.sleep(3)
-
     # 爬取每周热点
     logger.info("--- 开始爬取每周热点 ---")
     weekly_repos = fetch_trending(since="weekly")
     logger.info("每周热点: 获取到 %d 个仓库", len(weekly_repos))
-
+    if not weekly_repos:
+        errors.append("爬取每周热点失败")
     if not daily_repos and not weekly_repos:
-        logger.error("未获取到任何数据，退出")
+        logger.error("未获取到任何数据")
+        send_failure_notify("爬取每日和每周热点均失败（已重试 10 次）")
         sys.exit(1)
 
     # AI 总结
     logger.info("--- 开始 AI 总结 ---")
     daily_repos = ai_summarize(daily_repos, "每日热点")
-    # 等待一下避免 API 限流
     time.sleep(5)
     weekly_repos = ai_summarize(weekly_repos, "每周热点")
-
-    # 生成 HTML 邮件
     logger.info("--- 生成邮件内容 ---")
     html = build_email_html(daily_repos, weekly_repos)
-
     # 发送邮件
     logger.info("--- 发送邮件 ---")
     success = send_email(html)
-
     if success:
         logger.info("✅ 全部完成！")
     else:
         logger.error("❌ 邮件发送失败")
+        send_failure_notify("邮件发送失败")
         sys.exit(1)
 
 
