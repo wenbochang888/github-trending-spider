@@ -55,5 +55,5 @@ MAIL_TO = os.environ.get("MAIL_TO", "727987105@qq.com")
 # 日志文件路径
 LOG_FILE = os.environ.get(
     "LOG_FILE",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "trending.log"),
+    "/root/logs/github-python/trending.log",
 )
