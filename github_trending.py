@@ -21,8 +21,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import Header
-from io import BytesIO
-from email.generator import BytesGenerator
+
 
 try:
     import requests
@@ -445,17 +444,13 @@ def send_email(html_content):
     html_part = MIMEText(html_content, "html", "utf-8")
     msg.attach(text_part)
     msg.attach(html_part)
-    # 用 BytesGenerator 安全序列化，避免 str/bytes 拼接错误
-    bio = BytesIO()
-    gen = BytesGenerator(bio)
-    gen.flatten(msg)
-    msg_bytes = bio.getvalue()
+
 
     try:
         logger.info("正在连接 SMTP 服务器 %s:%d ...", SMTP_SERVER, SMTP_PORT)
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], msg_bytes)
+            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_string())
         logger.info("邮件发送成功！收件人: %s", MAIL_TO)
         return True
     except smtplib.SMTPAuthenticationError:
@@ -486,13 +481,11 @@ def send_failure_notify(error_msg):
         msg["From"] = MAIL_FROM
         msg["To"] = MAIL_TO
 
-        bio = BytesIO()
-        gen = BytesGenerator(bio)
-        gen.flatten(msg)
+
 
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], bio.getvalue())
+            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_string())
         logger.info("失败通知邮件已发送")
     except Exception as e:
         logger.error("发送失败通知邮件也失败了: %s", e)
