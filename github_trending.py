@@ -111,7 +111,10 @@ def fetch_trending(since="daily", max_retries=10):
         if repo:
             repos.append(repo)
 
-    return repos
+    # 只保留前 5 个热点仓库
+    return repos[:5]
+
+
 
 
 def _parse_article(article, since):
@@ -382,10 +385,7 @@ def _build_table(repos):
         "<tr>"
         "<th>#</th>"
         "<th>项目</th>"
-        "<th>语言</th>"
         "<th>⭐ Stars</th>"
-        "<th>🍴 Forks</th>"
-        "<th>📈 新增</th>"
         "<th>📝 AI 总结</th>"
         "</tr>",
     ]
@@ -394,22 +394,14 @@ def _build_table(repos):
         rows.append(
             "<tr>"
             "<td>{}</td>"
-            '<td><a href="{}">{}</a><br/>'
-            '<span style="color:#586069;font-size:12px;">{}</span></td>'
-            '<td><span class="lang">{}</span></td>'
+            '<td><a href="{}">{}</a></td>'
             '<td class="stars">{:,}</td>'
-            "<td>{:,}</td>"
-            '<td class="period">{}</td>'
             '<td class="summary">{}</td>'
             "</tr>".format(
                 i,
                 r["url"],
                 r["full_name"],
-                _escape_html(r["description"][:100] + ("..." if len(r["description"]) > 100 else "")),
-                r["language"] or "-",
                 r["stars"],
-                r["forks"],
-                r["stars_period"],
                 _escape_html(r.get("ai_summary", "")),
             )
         )

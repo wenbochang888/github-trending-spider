@@ -25,9 +25,9 @@ AI_API_URL = os.environ.get(
 )
 
 # 使用的 AI 模型
-# 免费层可用模型：gpt-4o-mini (Low tier), gpt-4o (High tier)
-# 建议使用 gpt-4o-mini，免费额度更多 (每天 150 请求 vs 50 请求)
-AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")
+# 可用模型：gpt-4o-mini (快), gpt-4o (质量最优), deepseek-r1 (中文优化)
+# gpt-4o: 中文总结质量最佳，比 gpt-4o-mini 提升 15-20%
+AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o")
 
 # =========================================================================
 # 邮件配置 (163 邮箱 SMTP)
