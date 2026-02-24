@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.header import Header
 
 try:
     import requests
@@ -435,7 +436,7 @@ def send_email(html_content):
     subject = "GitHub Trending 热点报告 - {}".format(today)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
+    msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = MAIL_FROM
     msg["To"] = MAIL_TO
 
@@ -449,7 +450,7 @@ def send_email(html_content):
         logger.info("正在连接 SMTP 服务器 %s:%d ...", SMTP_SERVER, SMTP_PORT)
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_string())
+            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_bytes())
         logger.info("邮件发送成功！收件人: %s", MAIL_TO)
         return True
     except smtplib.SMTPAuthenticationError:
