@@ -436,6 +436,8 @@ def send_email(html_content):
     """通过 SMTP 发送 HTML 邮件。"""
     today = datetime.now().strftime("%Y-%m-%d")
     subject = "GitHub Trending 热点报告 - {}".format(today)
+
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = MAIL_FROM
     msg["To"] = MAIL_TO
@@ -462,6 +464,8 @@ def send_email(html_content):
         logger.error("SMTP 错误: %s", e)
     except Exception as e:
         logger.error("邮件发送异常: %s", e)
+
+    return False
 
 
 # =========================================================================
