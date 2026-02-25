@@ -46,7 +46,7 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", SMTP_USER)
 
 # 收件人邮箱地址
-MAIL_TO = os.environ.get("MAIL_TO", "727987105@qq.com")
+MAIL_TO = os.environ.get("MAIL_TO", "727987105@qq.com, wenbo.chang@huolala.cn")
 
 # =========================================================================
 # 日志配置

@@ -116,7 +116,6 @@ def fetch_trending(since="daily", max_retries=10):
 
 
 
-
 def _parse_article(article, since):
     """解析单个 <article class='Box-row'> 元素。"""
     try:
@@ -423,27 +422,36 @@ def _escape_html(text):
 # =========================================================================
 # 4. 发送邮件
 # =========================================================================
+def _parse_recipients():
+    """解析 MAIL_TO 配置，支持多收件人（逗号分隔）。"""
+    if isinstance(MAIL_TO, str):
+        return [r.strip() for r in MAIL_TO.split(",") if r.strip()]
+    else:
+        return MAIL_TO if isinstance(MAIL_TO, list) else [MAIL_TO]
+
+
 def send_email(html_content):
     """通过 SMTP 发送 HTML 邮件。"""
     today = datetime.now().strftime("%Y-%m-%d")
     subject = "GitHub Trending 热点报告 - {}".format(today)
 
+    recipients = _parse_recipients()
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = MAIL_FROM
-    msg["To"] = MAIL_TO
+    msg["To"] = ", ".join(recipients)
     text_part = MIMEText("请使用支持 HTML 的邮件客户端查看此邮件。", "plain", "utf-8")
     html_part = MIMEText(html_content, "html", "utf-8")
     msg.attach(text_part)
     msg.attach(html_part)
 
-
     try:
         logger.info("正在连接 SMTP 服务器 %s:%d ...", SMTP_SERVER, SMTP_PORT)
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_string())
-        logger.info("邮件发送成功！收件人: %s", MAIL_TO)
+            server.sendmail(MAIL_FROM, recipients, msg.as_string())
+        logger.info("邮件发送成功！收件人: %s", recipients)
         return True
     except smtplib.SMTPAuthenticationError:
         logger.error("SMTP 认证失败，请检查邮箱账号和授权码")
@@ -460,6 +468,8 @@ def send_email(html_content):
 # =========================================================================
 def send_failure_notify(error_msg):
     """当主流程失败时，发送一封简单的失败通知邮件。"""
+    recipients = _parse_recipients()
+
     try:
         today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         msg = MIMEText(
@@ -471,13 +481,11 @@ def send_failure_notify(error_msg):
         )
         msg["Subject"] = Header("[FAIL] GitHub Trending Spider - {}".format(today), "utf-8")
         msg["From"] = MAIL_FROM
-        msg["To"] = MAIL_TO
-
-
+        msg["To"] = ", ".join(recipients)
 
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [MAIL_TO], msg.as_string())
+            server.sendmail(MAIL_FROM, recipients, msg.as_string())
         logger.info("失败通知邮件已发送")
     except Exception as e:
         logger.error("发送失败通知邮件也失败了: %s", e)
