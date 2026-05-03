@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-GitHub Trending Spider 配置文件
+GitHub Trending Spider + Hacker News 配置文件
 
 使用说明：
 1. 复制此文件并根据实际情况修改配置
@@ -57,3 +57,24 @@ LOG_FILE = os.environ.get(
     "LOG_FILE",
     "/root/logs/github-python/trending.log",
 )
+
+# =========================================================================
+# Hacker News 配置
+# =========================================================================
+
+# HN 官方 Firebase API 基础地址
+HN_API_BASE = os.environ.get(
+    "HN_API_BASE", "https://hacker-news.firebaseio.com/v0"
+)
+
+# 获取前 N 个热门帖子
+HN_TOP_COUNT = int(os.environ.get("HN_TOP_COUNT", "10"))
+
+# 每个帖子获取前 N 条顶级评论
+HN_COMMENTS_PER_STORY = int(os.environ.get("HN_COMMENTS_PER_STORY", "10"))
+
+# HN 请求最大重试次数
+HN_MAX_RETRIES = int(os.environ.get("HN_MAX_RETRIES", "5"))
+
+# 并发请求线程数
+HN_CONCURRENT_WORKERS = int(os.environ.get("HN_CONCURRENT_WORKERS", "10"))

@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GitHub Trending 每日/每周热点爬取 + AI总结 + 邮件推送
+GitHub Trending 爬虫 + AI 总结模块
 
-功能：
-1. 爬取 GitHub Trending 每日/每周热点项目
-2. 通过 GitHub Models API (GPT-4o-mini) 进行中文总结
-3. 生成 HTML 表格邮件发送到指定邮箱
-
-依赖：requests, beautifulsoup4
-Python >= 3.6
+负责爬取 GitHub Trending 每日/每周热点项目，
+调用 AI 生成中文总结。
 """
 
 import json
 import logging
-import smtplib
+import re
 import sys
 import time
-from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.header import Header
-
 
 try:
     import requests
@@ -32,28 +22,10 @@ except ImportError:
 
 from config import (
     GITHUB_TOKEN,
-    SMTP_SERVER,
-    SMTP_PORT,
-    SMTP_USER,
-    SMTP_PASSWORD,
-    MAIL_TO,
-    MAIL_FROM,
     AI_MODEL,
     AI_API_URL,
-    LOG_FILE,
 )
 
-# ---------------------------------------------------------------------------
-# 日志配置
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -113,7 +85,6 @@ def fetch_trending(since="daily", max_retries=10):
 
     # 只保留前 5 个热点仓库
     return repos[:5]
-
 
 
 def _parse_article(article, since):
@@ -288,10 +259,10 @@ def _call_ai_api(prompt, max_retries=10):
 
             # 尝试解析 JSON（处理可能的 markdown 代码块包裹）
             content = content.strip()
-            if content.startswith("```"):
-                # 移除 ```json ... ``` 包裹
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1])
+            # 用正则提取 JSON 对象，兼容 ```json ... ``` 和多余空行
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
             parsed = json.loads(content)
             return parsed.get("summaries", [])
 
@@ -315,224 +286,3 @@ def _call_ai_api(prompt, max_retries=10):
                 time.sleep(10)
 
     return None
-
-
-# =========================================================================
-# 3. 生成 HTML 邮件
-# =========================================================================
-def build_email_html(daily_repos, weekly_repos):
-    """
-    将每日和每周热点构建成 HTML 邮件内容。
-    """
-    today = datetime.now().strftime("%Y-%m-%d")
-    html_parts = [
-        "<!DOCTYPE html>",
-        '<html><head><meta charset="utf-8">',
-        "<style>",
-        "  body { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; "
-        "         color: #24292e; padding: 20px; max-width: 1000px; margin: 0 auto; }",
-        "  h1 { color: #0366d6; border-bottom: 2px solid #e1e4e8; padding-bottom: 10px; }",
-        "  h2 { color: #24292e; margin-top: 30px; }",
-        "  table { border-collapse: collapse; width: 100%; margin: 15px 0; }",
-        "  th { background-color: #0366d6; color: white; padding: 10px 12px; "
-        "       text-align: left; font-size: 13px; }",
-        "  td { padding: 10px 12px; border-bottom: 1px solid #e1e4e8; "
-        "       font-size: 13px; vertical-align: top; }",
-        "  tr:nth-child(even) { background-color: #f6f8fa; }",
-        "  tr:hover { background-color: #f0f4f8; }",
-        "  a { color: #0366d6; text-decoration: none; }",
-        "  a:hover { text-decoration: underline; }",
-        "  .lang { display: inline-block; padding: 2px 8px; border-radius: 12px; "
-        "          background: #eff3f6; font-size: 12px; }",
-        "  .stars { color: #e3b341; font-weight: bold; }",
-        "  .period { color: #22863a; font-size: 12px; }",
-        "  .summary { color: #586069; line-height: 1.5; }",
-        "  .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #e1e4e8; "
-        "            color: #6a737d; font-size: 12px; }",
-        "</style>",
-        "</head><body>",
-        "<h1>🔥 GitHub Trending 热点报告 - {}</h1>".format(today),
-    ]
-
-    if daily_repos:
-        html_parts.append("<h2>📅 每日热点 (Daily)</h2>")
-        html_parts.append(_build_table(daily_repos))
-
-    if weekly_repos:
-        html_parts.append("<h2>📆 每周热点 (Weekly)</h2>")
-        html_parts.append(_build_table(weekly_repos))
-
-    if not daily_repos and not weekly_repos:
-        html_parts.append("<p>今日未能获取到热点数据，请检查网络或日志。</p>")
-
-    html_parts.extend([
-        '<div class="footer">',
-        "<p>此邮件由 GitHub Trending Spider 自动生成并发送。</p>",
-        "<p>数据来源：<a href='https://github.com/trending'>GitHub Trending</a> "
-        "| AI 总结：GitHub Models ({}) </p>".format(AI_MODEL),
-        "</div>",
-        "</body></html>",
-    ])
-
-    return "\n".join(html_parts)
-
-
-def _build_table(repos):
-    """构建单个表格的 HTML。"""
-    rows = [
-        "<table>",
-        "<tr>"
-        "<th>#</th>"
-        "<th>项目</th>"
-        "<th>⭐ Stars</th>"
-        "<th>📝 AI 总结</th>"
-        "</tr>",
-    ]
-
-    for i, r in enumerate(repos, 1):
-        rows.append(
-            "<tr>"
-            "<td>{}</td>"
-            '<td><a href="{}">{}</a></td>'
-            '<td class="stars">{:,}</td>'
-            '<td class="summary">{}</td>'
-            "</tr>".format(
-                i,
-                r["url"],
-                r["full_name"],
-                r["stars"],
-                _escape_html(r.get("ai_summary", "")),
-            )
-        )
-
-    rows.append("</table>")
-    return "\n".join(rows)
-
-
-def _escape_html(text):
-    """简单的 HTML 转义。"""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-# =========================================================================
-# 4. 发送邮件
-# =========================================================================
-def _parse_recipients():
-    """解析 MAIL_TO 配置，支持多收件人（逗号分隔）。"""
-    if isinstance(MAIL_TO, str):
-        return [r.strip() for r in MAIL_TO.split(",") if r.strip()]
-    else:
-        return MAIL_TO if isinstance(MAIL_TO, list) else [MAIL_TO]
-
-
-def send_email(html_content):
-    """通过 SMTP 发送 HTML 邮件。"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    subject = "GitHub Trending 热点报告 - {}".format(today)
-
-    recipients = _parse_recipients()
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = Header(subject, "utf-8")
-    msg["From"] = MAIL_FROM
-    msg["To"] = ", ".join(recipients)
-    text_part = MIMEText("请使用支持 HTML 的邮件客户端查看此邮件。", "plain", "utf-8")
-    html_part = MIMEText(html_content, "html", "utf-8")
-    msg.attach(text_part)
-    msg.attach(html_part)
-
-    try:
-        logger.info("正在连接 SMTP 服务器 %s:%d ...", SMTP_SERVER, SMTP_PORT)
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, recipients, msg.as_string())
-        logger.info("邮件发送成功！收件人: %s", recipients)
-        return True
-    except smtplib.SMTPAuthenticationError:
-        logger.error("SMTP 认证失败，请检查邮箱账号和授权码")
-    except smtplib.SMTPException as e:
-        logger.error("SMTP 错误: %s", e)
-    except Exception as e:
-        logger.error("邮件发送异常: %s", e)
-
-    return False
-
-
-# =========================================================================
-# 5. 主流程
-# =========================================================================
-def send_failure_notify(error_msg):
-    """当主流程失败时，发送一封简单的失败通知邮件。"""
-    recipients = _parse_recipients()
-
-    try:
-        today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        msg = MIMEText(
-            "GitHub Trending Spider 运行失败\n\n"
-            "时间: {}\n"
-            "错误: {}\n\n"
-            "请检查服务器日志: /root/logs/github-python/trending.log".format(today, error_msg),
-            "plain", "utf-8"
-        )
-        msg["Subject"] = Header("[FAIL] GitHub Trending Spider - {}".format(today), "utf-8")
-        msg["From"] = MAIL_FROM
-        msg["To"] = ", ".join(recipients)
-
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, recipients, msg.as_string())
-        logger.info("失败通知邮件已发送")
-    except Exception as e:
-        logger.error("发送失败通知邮件也失败了: %s", e)
-
-
-def main():
-    logger.info("=" * 60)
-    logger.info("GitHub Trending Spider 启动 - %s", datetime.now().isoformat())
-    logger.info("=" * 60)
-
-    errors = []
-    # 爬取每日热点
-    logger.info("--- 开始爬取每日热点 ---")
-    daily_repos = fetch_trending(since="daily")
-    logger.info("每日热点: 获取到 %d 个仓库", len(daily_repos))
-    if not daily_repos:
-        errors.append("爬取每日热点失败")
-
-    time.sleep(3)
-    # 爬取每周热点
-    logger.info("--- 开始爬取每周热点 ---")
-    weekly_repos = fetch_trending(since="weekly")
-    logger.info("每周热点: 获取到 %d 个仓库", len(weekly_repos))
-    if not weekly_repos:
-        errors.append("爬取每周热点失败")
-    if not daily_repos and not weekly_repos:
-        logger.error("未获取到任何数据")
-        send_failure_notify("爬取每日和每周热点均失败（已重试 10 次）")
-        sys.exit(1)
-
-    # AI 总结
-    logger.info("--- 开始 AI 总结 ---")
-    daily_repos = ai_summarize(daily_repos, "每日热点")
-    time.sleep(5)
-    weekly_repos = ai_summarize(weekly_repos, "每周热点")
-    logger.info("--- 生成邮件内容 ---")
-    html = build_email_html(daily_repos, weekly_repos)
-    # 发送邮件
-    logger.info("--- 发送邮件 ---")
-    success = send_email(html)
-    if success:
-        logger.info("✅ 全部完成！")
-    else:
-        logger.error("❌ 邮件发送失败")
-        send_failure_notify("邮件发送失败")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
