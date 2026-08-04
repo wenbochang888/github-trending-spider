@@ -19,6 +19,7 @@ from config import (
     AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
+    AI_REQUEST_PROXIES,
     LINUX_DO_MAX_ITEMS,
     LINUX_DO_MAX_RETRIES,
     LINUX_DO_NEWS_URL,
@@ -169,6 +170,7 @@ def _call_linux_do_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()

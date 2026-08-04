@@ -20,6 +20,16 @@ def _get_bool_env(name, default=False):
     return value.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _get_http_header_env(name, default=""):
+    """读取可安全用于 requests 请求头的 Latin-1 环境变量。"""
+    value = os.environ.get(name, default)
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError:
+        return default
+    return value
+
+
 # =========================================================================
 # AI API 配置（OpenRouter，OpenAI 兼容接口）
 # =========================================================================
@@ -31,7 +41,13 @@ AI_PROVIDER = os.environ.get("AI_PROVIDER", "openrouter")
 AI_API_KEY = os.environ.get("AI_API_KEY", "")
 
 # OpenRouter 可选应用标题请求头，用于控制台归因。
-AI_APP_NAME = os.environ.get("AI_APP_NAME", "每日AI前沿信息")
+AI_APP_NAME = _get_http_header_env("AI_APP_NAME", "AI Daily Frontier")
+
+# 默认仅让 OpenRouter 请求绕过系统代理，避免失效代理阻断全部 AI 摘要。
+AI_BYPASS_PROXY = _get_bool_env("AI_BYPASS_PROXY", True)
+AI_REQUEST_PROXIES = (
+    {"http": "", "https": "", "all": ""} if AI_BYPASS_PROXY else None
+)
 
 # OpenRouter API 基础地址（OpenAI 兼容接口）
 AI_API_URL = os.environ.get(

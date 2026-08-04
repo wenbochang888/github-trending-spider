@@ -93,7 +93,8 @@ All config via environment variables with sensible defaults:
 | `AI_API_URL` | https://openrouter.ai/api/v1 | OpenRouter API base URL |
 | `AI_MODEL` | deepseek/deepseek-v4-flash-0731 | Fixed summary model |
 | `AI_API_KEY` | - | OpenRouter API key (required; never falls back to a GitHub token) |
-| `AI_APP_NAME` | 每日AI前沿信息 | OpenRouter `X-Title` application label |
+| `AI_APP_NAME` | AI Daily Frontier | OpenRouter `X-Title` application label (must be Latin-1 encodable) |
+| `AI_BYPASS_PROXY` | true | Bypass environment proxies for OpenRouter requests only |
 | `GITHUB_TRENDING_TOP_COUNT` | 10 | Top N repos per GitHub chart |
 | `HN_TOP_COUNT` | 10 | Top N HN stories |
 | `TLDR_AI_TOP_COUNT` | 10 | Top N TLDR AI items |

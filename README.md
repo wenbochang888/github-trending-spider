@@ -192,7 +192,8 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 | `AI_API_URL` | https://openrouter.ai/api/v1 | OpenRouter API 基础地址 |
 | `AI_MODEL` | deepseek/deepseek-v4-flash-0731 | 普通摘要固定模型 |
 | `AI_API_KEY` | - | OpenRouter API Key（必须，不回退读取 GitHub Token） |
-| `AI_APP_NAME` | 每日AI前沿信息 | OpenRouter `X-Title` 应用标识 |
+| `AI_APP_NAME` | AI Daily Frontier | OpenRouter `X-Title` 应用标识（须使用 Latin-1 可编码字符） |
+| `AI_BYPASS_PROXY` | true | 仅 OpenRouter 请求绕过系统代理，避免失效代理阻断摘要 |
 | `GITHUB_TRENDING_TOP_COUNT` | 10 | GitHub 各榜单取前 N 条 |
 | `HN_TOP_COUNT` | 10 | HN 取前 N 条 |
 | `TLDR_AI_TOP_COUNT` | 10 | TLDR AI 取前 N 条 |

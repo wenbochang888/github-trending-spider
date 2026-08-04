@@ -19,6 +19,7 @@ from config import (
     AI_API_KEY,
     AI_API_URL,
     AI_APP_NAME,
+    AI_REQUEST_PROXIES,
     OUTPUT_ARCHIVE_DIR,
     PODCAST_ENABLED,
     PODCAST_EXCLUDED_SOURCE_IDS,
@@ -416,6 +417,7 @@ def _call_script_ai_api(prompt):
                 url,
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=90,
             )
             if _is_retryable_status(response.status_code) and attempt < max_retries:

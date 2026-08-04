@@ -24,6 +24,7 @@ from config import (
     AI_API_KEY,
     AI_APP_NAME,
     AI_MODEL,
+    AI_REQUEST_PROXIES,
     AI_API_URL,
     GITHUB_TRENDING_TOP_COUNT,
 )
@@ -266,6 +267,7 @@ def _call_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()

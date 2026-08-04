@@ -20,6 +20,7 @@ from config import (
     AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
+    AI_REQUEST_PROXIES,
     HN_API_BASE,
     HN_COMMENTS_PER_STORY,
     HN_CONCURRENT_WORKERS,
@@ -392,6 +393,7 @@ def _call_hn_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()

@@ -18,6 +18,7 @@ from config import (
     AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
+    AI_REQUEST_PROXIES,
     V2EX_API_BASE,
     V2EX_MAX_RETRIES,
     V2EX_REPLIES_PER_TOPIC,
@@ -302,6 +303,7 @@ def _call_v2ex_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()

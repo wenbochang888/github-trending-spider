@@ -568,7 +568,7 @@ class TestPodcastBuilder(unittest.TestCase):
                 }
 
         with patch("podcast_builder.AI_API_KEY", "openrouter-key"), \
-                patch("podcast_builder.AI_APP_NAME", "每日AI前沿信息"), \
+                patch("podcast_builder.AI_APP_NAME", "AI Daily Frontier"), \
                 patch("podcast_builder.PODCAST_SCRIPT_MODEL", "deepseek/deepseek-v4-flash-0731"), \
                 patch("podcast_builder.PODCAST_SCRIPT_MAX_RETRIES", 2), \
                 patch("podcast_builder.PODCAST_SCRIPT_RETRY_SECONDS", 1), \
@@ -587,7 +587,11 @@ class TestPodcastBuilder(unittest.TestCase):
         sleep.assert_called_once()
         _, kwargs = post.call_args
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer openrouter-key")
-        self.assertEqual(kwargs["headers"]["X-Title"], "每日AI前沿信息")
+        self.assertEqual(kwargs["headers"]["X-Title"], "AI Daily Frontier")
+        self.assertEqual(
+            kwargs["proxies"],
+            {"http": "", "https": "", "all": ""},
+        )
         self.assertEqual(kwargs["json"]["model"], "deepseek/deepseek-v4-flash-0731")
         self.assertEqual(kwargs["json"]["reasoning"], {"enabled": False})
         self.assertEqual(kwargs["json"]["response_format"], {"type": "json_object"})

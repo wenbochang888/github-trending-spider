@@ -10,10 +10,21 @@ import requests
 
 sys.path.insert(0, ".")
 
+import config  # noqa: E402
 import github_trending  # noqa: E402
 
 
 class TestOpenRouterAiProvider(unittest.TestCase):
+    def test_ai_app_name_falls_back_when_header_value_is_not_latin1(self):
+        with patch.dict("os.environ", {"AI_APP_NAME": "每日AI前沿信息"}):
+            app_name = config._get_http_header_env(
+                "AI_APP_NAME",
+                "AI Daily Frontier",
+            )
+
+        self.assertEqual(app_name, "AI Daily Frontier")
+        app_name.encode("latin-1")
+
     def _success_response(self):
         response = MagicMock()
         response.status_code = 200
@@ -47,7 +58,7 @@ class TestOpenRouterAiProvider(unittest.TestCase):
         post.return_value = self._success_response()
 
         with patch("github_trending.AI_API_KEY", "openrouter-key"), \
-                patch("github_trending.AI_APP_NAME", "每日AI前沿信息"), \
+                patch("github_trending.AI_APP_NAME", "AI Daily Frontier"), \
                 patch("github_trending.AI_API_URL", "https://openrouter.ai/api/v1"), \
                 patch("github_trending.AI_MODEL", "deepseek/deepseek-v4-flash-0731"):
             summaries = github_trending._call_ai_api("prompt")
@@ -59,7 +70,11 @@ class TestOpenRouterAiProvider(unittest.TestCase):
             "https://openrouter.ai/api/v1/chat/completions",
         )
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer openrouter-key")
-        self.assertEqual(kwargs["headers"]["X-Title"], "每日AI前沿信息")
+        self.assertEqual(kwargs["headers"]["X-Title"], "AI Daily Frontier")
+        self.assertEqual(
+            kwargs["proxies"],
+            {"http": "", "https": "", "all": ""},
+        )
         self.assertEqual(kwargs["json"]["model"], "deepseek/deepseek-v4-flash-0731")
         self.assertEqual(kwargs["json"]["reasoning"], {"enabled": False})
         self.assertEqual(kwargs["json"]["response_format"], {"type": "json_object"})

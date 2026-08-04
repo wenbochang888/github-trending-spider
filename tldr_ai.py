@@ -20,6 +20,7 @@ from config import (
     AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
+    AI_REQUEST_PROXIES,
     TLDR_AI_HOME_URL,
     TLDR_AI_MAX_RETRIES,
     TLDR_AI_TOP_COUNT,
@@ -500,6 +501,7 @@ def _call_tldr_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()

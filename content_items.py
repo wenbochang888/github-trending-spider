@@ -12,7 +12,13 @@ from datetime import datetime
 
 import requests
 
-from config import AI_API_KEY, AI_API_URL, AI_APP_NAME, AI_MODEL
+from config import (
+    AI_API_KEY,
+    AI_API_URL,
+    AI_APP_NAME,
+    AI_MODEL,
+    AI_REQUEST_PROXIES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +328,7 @@ def _call_content_ai_api(prompt, max_retries=10):
                 "{}/chat/completions".format(AI_API_URL),
                 headers=headers,
                 json=payload,
+                proxies=AI_REQUEST_PROXIES,
                 timeout=120,
             )
             resp.raise_for_status()
