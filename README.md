@@ -17,7 +17,7 @@
 
 ---
 
-**AI Daily Frontier** 每日自动爬取 GitHub Trending、Hacker News、TLDR AI、OpenAI、Anthropic、InfoQ AI Development 等信息源，通过 GitHub Models API (GPT-4o) 生成中文摘要，提供 FastAPI 只读接口和 Vue 前端资讯流页面。
+**AI Daily Frontier** 每日自动爬取 GitHub Trending、Hacker News、TLDR AI、OpenAI、Anthropic、InfoQ AI Development 等信息源，通过 OpenRouter 的 DeepSeek V4 Flash 生成中文摘要，提供 FastAPI 只读接口和 Vue 前端资讯流页面。
 
 线上地址：**https://www.gdufe888.top/ai/**
 
@@ -34,7 +34,7 @@
 ## 功能特性
 
 - **6 大信息源** — GitHub Trending (日/周)、Hacker News、TLDR AI、OpenAI、Anthropic、InfoQ AI
-- **AI 中文摘要** — GPT-4o 生成面向后端工程师的中文总结，关注工程落地
+- **AI 中文摘要** — DeepSeek V4 Flash 生成面向后端工程师的中文总结，关注工程落地
 - **中英双语** — 前端支持 `?lang=en` / `?lang=zh` 切换，英文用户直接看原文摘要
 - **统一 JSON** — 所有来源输出统一字段结构，`output/latest.json`
 - **按来源归档** — 磁盘永久保留 + Redis 3 天热数据缓存
@@ -51,8 +51,8 @@ git clone https://github.com/wenbochang888/github-trending-spider.git
 cd github-trending-spider
 pip3 install -r requirements.txt
 
-# 配置（必须）
-export GITHUB_TOKEN="ghp_your_token"  # GitHub Settings → Tokens → models:read
+# 配置（必须；不要把真实 Key 提交到仓库）
+export AI_API_KEY="your_openrouter_key"
 
 # 测试采集
 python3 main.py
@@ -188,7 +188,11 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `GITHUB_TOKEN` | - | GitHub Models API token (必须) |
+| `AI_PROVIDER` | openrouter | AI 供应商，当前仅支持 OpenRouter |
+| `AI_API_URL` | https://openrouter.ai/api/v1 | OpenRouter API 基础地址 |
+| `AI_MODEL` | deepseek/deepseek-v4-flash-0731 | 普通摘要固定模型 |
+| `AI_API_KEY` | - | OpenRouter API Key（必须，不回退读取 GitHub Token） |
+| `AI_APP_NAME` | 每日AI前沿信息 | OpenRouter `X-Title` 应用标识 |
 | `GITHUB_TRENDING_TOP_COUNT` | 10 | GitHub 各榜单取前 N 条 |
 | `HN_TOP_COUNT` | 10 | HN 取前 N 条 |
 | `TLDR_AI_TOP_COUNT` | 10 | TLDR AI 取前 N 条 |
@@ -201,6 +205,8 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 | `PODCAST_SCHEDULE_TIME` | 02:30 | 每天生成播客的时间 |
 | `PODCAST_TARGET_DATE_MODE` | yesterday | 生成前一天内容的播客 |
 | `PODCAST_EXCLUDED_SOURCE_IDS` | tldr-ai,infoq | 播客生成时排除的来源 ID，逗号分隔 |
+| `PODCAST_SCRIPT_PROVIDER` | openrouter | 播客脚本 AI 供应商 |
+| `PODCAST_SCRIPT_MODEL` | deepseek/deepseek-v4-flash-0731 | 播客脚本固定模型 |
 | `PODCAST_SCRIPT_MAX_RETRIES` | 5 | 播客脚本生成 API 临时失败时最大重试次数 |
 | `PODCAST_SCRIPT_RETRY_SECONDS` | 5 | 播客脚本生成 API 重试基础间隔秒数，实际按次数递增 |
 | `PODCAST_TTS_PROVIDER` | edge_tts | 第一版使用 edge-tts 合成语音 |
@@ -222,7 +228,7 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 | `PODCAST_MIN_TURN_COUNT` | 30 | 新生成脚本的最低有效对话轮数，不足会重试一次 |
 | `PODCAST_MIN_SCRIPT_CHARS` | 1600 | 新生成脚本的最低台词字符数，不足会重试一次 |
 
-每日播客还需要安装系统命令 `ffmpeg`（需同时包含 `ffprobe`），并在 Python 依赖中安装 `edge-tts`。脚本生成复用 `GITHUB_TOKEN` 调用 GitHub Models，不需要 `OPENAI_API_KEY`。
+每日播客还需要安装系统命令 `ffmpeg`（需同时包含 `ffprobe`），并在 Python 依赖中安装 `edge-tts`。脚本生成复用普通摘要的 `AI_API_KEY` 调用 OpenRouter，不需要额外的模型 Key。
 
 如果脚本和分段语音已经生成，仅需重新合并指定日期的音频，可执行：
 
@@ -230,7 +236,7 @@ GET https://www.gdufe888.top/api/sources/{source_id}/latest
 python3 scripts/rebuild_podcast_audio.py --date 2026-07-21
 ```
 
-该命令不会重新请求 GitHub Models 或 edge-tts；它会校验全部语音片段、重新生成同采样率静音、校验最终时长，并在成功后更新该日期 metadata。
+该命令不会重新请求 OpenRouter 或 edge-tts；它会校验全部语音片段、重新生成同采样率静音、校验最终时长，并在成功后更新该日期 metadata。
 播客相关环境变量在后端进程启动时读取；修改 `PODCAST_ENABLED` 或其他播客配置后，需要重启后端服务才会生效。
 
 > 完整配置项见源码 `config.py`

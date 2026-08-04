@@ -321,9 +321,9 @@ class TestAiSummarizeV2ex(unittest.TestCase):
             ],
         }
 
-    @patch("v2ex.GITHUB_TOKEN", "")
+    @patch("v2ex.AI_API_KEY", "")
     def test_no_token_degradation(self):
-        """无 GITHUB_TOKEN 时降级"""
+        """无 AI_API_KEY 时降级"""
         topics = [self._make_topic_with_replies(1, "测试帖")]
         result = ai_summarize_v2ex(topics)
         self.assertEqual(result[0]["ai_summary"], "（未配置 AI Token，无法生成总结）")
@@ -333,7 +333,7 @@ class TestAiSummarizeV2ex(unittest.TestCase):
         result = ai_summarize_v2ex([])
         self.assertEqual(result, [])
 
-    @patch("v2ex.GITHUB_TOKEN", "test-token")
+    @patch("v2ex.AI_API_KEY", "test-token")
     @patch("v2ex.requests.post")
     def test_ai_success(self, mock_post):
         """AI 调用成功"""
@@ -357,7 +357,7 @@ class TestAiSummarizeV2ex(unittest.TestCase):
         result = ai_summarize_v2ex(topics)
         self.assertEqual(result[0]["ai_summary"], "【测试话题】这是测试总结")
 
-    @patch("v2ex.GITHUB_TOKEN", "test-token")
+    @patch("v2ex.AI_API_KEY", "test-token")
     @patch("v2ex.requests.post")
     @patch("v2ex.time.sleep")
     def test_ai_failure_degradation(self, mock_sleep, mock_post):
@@ -369,7 +369,7 @@ class TestAiSummarizeV2ex(unittest.TestCase):
         result = ai_summarize_v2ex(topics)
         self.assertEqual(result[0]["ai_summary"], "（AI 总结生成失败）")
 
-    @patch("v2ex.GITHUB_TOKEN", "test-token")
+    @patch("v2ex.AI_API_KEY", "test-token")
     @patch("v2ex.requests.post")
     def test_ai_response_with_markdown_wrapper(self, mock_post):
         """AI 返回被 markdown 代码块包裹的 JSON"""
@@ -389,7 +389,7 @@ class TestAiSummarizeV2ex(unittest.TestCase):
         result = ai_summarize_v2ex(topics)
         self.assertEqual(result[0]["ai_summary"], "包裹测试")
 
-    @patch("v2ex.GITHUB_TOKEN", "test-token")
+    @patch("v2ex.AI_API_KEY", "test-token")
     @patch("v2ex.requests.post")
     def test_content_truncation_in_prompt(self, mock_post):
         """正文超过 300 字符时被截断"""

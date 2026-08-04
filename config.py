@@ -21,22 +21,25 @@ def _get_bool_env(name, default=False):
 
 
 # =========================================================================
-# GitHub Models API 配置
+# AI API 配置（OpenRouter，OpenAI 兼容接口）
 # =========================================================================
 
-# GitHub Personal Access Token (需要 models:read 权限)
-# 获取方式：https://github.com/settings/tokens → Generate new token → 勾选 models:read
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+# AI 供应商标识。当前代码仅支持 OpenRouter。
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "openrouter")
 
-# GitHub Models API 地址（OpenAI 兼容接口）
+# OpenRouter API Key。必须与 GitHub Token 分开，禁止回退读取 GITHUB_TOKEN。
+AI_API_KEY = os.environ.get("AI_API_KEY", "")
+
+# OpenRouter 可选应用标题请求头，用于控制台归因。
+AI_APP_NAME = os.environ.get("AI_APP_NAME", "每日AI前沿信息")
+
+# OpenRouter API 基础地址（OpenAI 兼容接口）
 AI_API_URL = os.environ.get(
-    "AI_API_URL", "https://models.inference.ai.azure.com"
+    "AI_API_URL", "https://openrouter.ai/api/v1"
 )
 
-# 使用的 AI 模型
-# 可用模型：gpt-4o-mini (快), gpt-4o (质量最优), deepseek-r1 (中文优化)
-# gpt-4o: 中文总结质量最佳，比 gpt-4o-mini 提升 15-20%
-AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o")
+# 固定模型 ID，避免 latest 别名静默切换版本。
+AI_MODEL = os.environ.get("AI_MODEL", "deepseek/deepseek-v4-flash-0731")
 
 # =========================================================================
 # GitHub Trending 配置
@@ -224,8 +227,8 @@ PODCAST_TARGET_DATE_MODE = os.environ.get("PODCAST_TARGET_DATE_MODE", "yesterday
 # 播客历史 API 返回最近 N 天；前端当前不单独展示最近几期。
 PODCAST_HISTORY_DAYS = int(os.environ.get("PODCAST_HISTORY_DAYS", "7"))
 
-# 播客脚本生成使用 GitHub Models，默认复用本项目既有 AI 模型。
-PODCAST_SCRIPT_PROVIDER = os.environ.get("PODCAST_SCRIPT_PROVIDER", "github_models")
+# 播客脚本生成使用 OpenRouter，默认复用本项目既有 AI 模型。
+PODCAST_SCRIPT_PROVIDER = os.environ.get("PODCAST_SCRIPT_PROVIDER", AI_PROVIDER)
 PODCAST_SCRIPT_MODEL = os.environ.get("PODCAST_SCRIPT_MODEL", AI_MODEL)
 PODCAST_SCRIPT_MAX_RETRIES = int(os.environ.get("PODCAST_SCRIPT_MAX_RETRIES", "5"))
 PODCAST_SCRIPT_RETRY_SECONDS = float(os.environ.get("PODCAST_SCRIPT_RETRY_SECONDS", "5"))

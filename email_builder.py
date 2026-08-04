@@ -425,7 +425,7 @@ def build_email_html(daily_repos, weekly_repos, hn_stories, v2ex_topics=None, tl
         "| <a href='https://openai.com/news/'>OpenAI</a> "
         "| <a href='https://www.anthropic.com/news'>Anthropic</a> "
         "| <a href='https://www.infoq.com/ai-development/'>InfoQ AI Development</a> "
-        "| AI 总结：GitHub Models ({}) </p>".format(AI_MODEL),
+        "| AI 总结：OpenRouter ({}) </p>".format(AI_MODEL),
         "</div>",
         "</body></html>",
     ])

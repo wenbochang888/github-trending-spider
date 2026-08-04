@@ -17,7 +17,7 @@
 
 ---
 
-**AI Daily Frontier** automatically crawls GitHub Trending, Hacker News, TLDR AI, OpenAI, Anthropic, and InfoQ AI Development daily. It generates Chinese summaries via GitHub Models API (GPT-4o) and serves content through a FastAPI read-only API and Vue frontend news feed.
+**AI Daily Frontier** automatically crawls GitHub Trending, Hacker News, TLDR AI, OpenAI, Anthropic, and InfoQ AI Development daily. It generates Chinese summaries with DeepSeek V4 Flash through OpenRouter and serves content through a FastAPI read-only API and Vue frontend news feed.
 
 Live demo: **https://www.gdufe888.top/ai/?lang=en**
 
@@ -34,7 +34,7 @@ Live demo: **https://www.gdufe888.top/ai/?lang=en**
 ## Features
 
 - **6 Sources** — GitHub Trending (daily/weekly), Hacker News, TLDR AI, OpenAI, Anthropic, InfoQ AI
-- **AI Summaries** — GPT-4o generates Chinese summaries focused on backend engineering
+- **AI Summaries** — DeepSeek V4 Flash generates Chinese summaries focused on backend engineering
 - **Bilingual UI** — Switch via `?lang=en` / `?lang=zh`; English users see original summaries
 - **Unified JSON** — All sources output consistent field structure at `output/latest.json`
 - **Archival** — Permanent disk archives + Redis 3-day hot cache
@@ -51,8 +51,8 @@ git clone https://github.com/wenbochang888/github-trending-spider.git
 cd github-trending-spider
 pip3 install -r requirements.txt
 
-# Configure (required)
-export GITHUB_TOKEN="ghp_your_token"  # GitHub Settings → Tokens → models:read
+# Configure (required; never commit a real key)
+export AI_API_KEY="your_openrouter_key"
 
 # Test collection
 python3 main.py
@@ -89,7 +89,11 @@ All config via environment variables with sensible defaults:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `GITHUB_TOKEN` | - | GitHub Models API token (required) |
+| `AI_PROVIDER` | openrouter | AI provider; OpenRouter is currently supported |
+| `AI_API_URL` | https://openrouter.ai/api/v1 | OpenRouter API base URL |
+| `AI_MODEL` | deepseek/deepseek-v4-flash-0731 | Fixed summary model |
+| `AI_API_KEY` | - | OpenRouter API key (required; never falls back to a GitHub token) |
+| `AI_APP_NAME` | 每日AI前沿信息 | OpenRouter `X-Title` application label |
 | `GITHUB_TRENDING_TOP_COUNT` | 10 | Top N repos per GitHub chart |
 | `HN_TOP_COUNT` | 10 | Top N HN stories |
 | `TLDR_AI_TOP_COUNT` | 10 | Top N TLDR AI items |
@@ -100,6 +104,8 @@ All config via environment variables with sensible defaults:
 | `PODCAST_SCHEDULE_TIME` | 02:30 | Daily podcast generation time |
 | `PODCAST_TARGET_DATE_MODE` | yesterday | Generate the previous day's podcast |
 | `PODCAST_EXCLUDED_SOURCE_IDS` | tldr-ai,infoq | Comma-separated source IDs excluded from podcast generation |
+| `PODCAST_SCRIPT_PROVIDER` | openrouter | Podcast script AI provider |
+| `PODCAST_SCRIPT_MODEL` | deepseek/deepseek-v4-flash-0731 | Fixed podcast script model |
 | `PODCAST_SCRIPT_MAX_RETRIES` | 5 | Max retries for transient podcast script API failures |
 | `PODCAST_SCRIPT_RETRY_SECONDS` | 5 | Base retry interval in seconds for podcast script API calls |
 | `PODCAST_TTS_PROVIDER` | edge_tts | TTS provider for the first version |
@@ -121,7 +127,7 @@ All config via environment variables with sensible defaults:
 | `PODCAST_MIN_TURN_COUNT` | 30 | Minimum turn count for a newly generated script before one retry |
 | `PODCAST_MIN_SCRIPT_CHARS` | 1600 | Minimum script text characters before one retry |
 
-Daily podcast generation also requires the system command `ffmpeg` (including `ffprobe`) and the Python package `edge-tts`. Script generation reuses `GITHUB_TOKEN` for GitHub Models and does not require `OPENAI_API_KEY`.
+Daily podcast generation also requires the system command `ffmpeg` (including `ffprobe`) and the Python package `edge-tts`. Script generation reuses the same `AI_API_KEY` as summaries and does not require a separate model key.
 
 If the script and speech segments already exist, rebuild only the merged audio for a date with:
 
@@ -129,7 +135,7 @@ If the script and speech segments already exist, rebuild only the merged audio f
 python3 scripts/rebuild_podcast_audio.py --date 2026-07-21
 ```
 
-This command does not call GitHub Models or edge-tts again. It validates every speech segment, recreates silence with the matching audio format, validates the merged duration, and updates metadata only after a successful rebuild.
+This command does not call OpenRouter or edge-tts again. It validates every speech segment, recreates silence with the matching audio format, validates the merged duration, and updates metadata only after a successful rebuild.
 Podcast environment variables are read when the backend process starts. Restart the backend after changing `PODCAST_ENABLED` or other podcast settings.
 
 > Full configuration options in `config.py`

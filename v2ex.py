@@ -14,7 +14,8 @@ import time
 import requests
 
 from config import (
-    GITHUB_TOKEN,
+    AI_API_KEY,
+    AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
     V2EX_API_BASE,
@@ -184,8 +185,8 @@ def ai_summarize_v2ex(topics):
     if not topics:
         return topics
 
-    if not GITHUB_TOKEN:
-        logger.warning("未配置 GITHUB_TOKEN，跳过 V2EX AI 总结")
+    if not AI_API_KEY:
+        logger.warning("未配置 AI_API_KEY，跳过 V2EX AI 总结")
         for t in topics:
             t["ai_summary"] = "（未配置 AI Token，无法生成总结）"
         return topics
@@ -266,15 +267,17 @@ def ai_summarize_v2ex(topics):
 
 def _call_v2ex_ai_api(prompt, max_retries=10):
     """
-    调用 GitHub Models API 进行 V2EX 内容总结。
+    调用 OpenRouter API 进行 V2EX 内容总结。
 
     Returns:
         list[dict] | None: 解析后的 summaries 列表
     """
     headers = {
-        "Authorization": "Bearer {}".format(GITHUB_TOKEN),
+        "Authorization": "Bearer {}".format(AI_API_KEY),
         "Content-Type": "application/json",
     }
+    if AI_APP_NAME:
+        headers["X-Title"] = AI_APP_NAME
     payload = {
         "model": AI_MODEL,
         "messages": [
@@ -288,6 +291,8 @@ def _call_v2ex_ai_api(prompt, max_retries=10):
         ],
         "temperature": 0.3,
         "max_tokens": 8000,
+        "reasoning": {"enabled": False},
+        "response_format": {"type": "json_object"},
     }
 
     for attempt in range(max_retries):
@@ -315,21 +320,32 @@ def _call_v2ex_ai_api(prompt, max_retries=10):
 
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
-            if status == 429:
-                wait = 60 * (attempt + 1)
-                logger.warning("API 限流，等待 %d 秒后重试...", wait)
+            logger.error("V2EX AI API HTTP 错误 %d: %s", status, e)
+            if status == 401:
+                logger.error("OpenRouter 鉴权失败，请检查 AI_API_KEY 是否有效")
+            elif status == 402:
+                logger.error("OpenRouter 余额或 Key 额度不足，请检查账户额度")
+            if status not in (408, 429, 500, 502, 503, 504):
+                break
+            if attempt < max_retries - 1:
+                wait = min(60.0, 5.0 * (attempt + 1))
+                if status == 429 and e.response is not None:
+                    try:
+                        wait = min(120.0, max(0.0, float(e.response.headers.get("Retry-After", wait))))
+                    except (TypeError, ValueError):
+                        pass
+                logger.warning("V2EX AI API 临时失败，等待 %.1f 秒后重试...", wait)
                 time.sleep(wait)
-            else:
-                logger.error("V2EX AI API HTTP 错误 %d: %s", status, e)
-                if attempt < max_retries - 1:
-                    time.sleep(10)
         except (json.JSONDecodeError, KeyError, IndexError) as e:
             logger.error("解析 V2EX AI 响应失败: %s", e)
             if attempt < max_retries - 1:
                 time.sleep(5)
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logger.error("V2EX AI API 调用异常: %s", e)
             if attempt < max_retries - 1:
                 time.sleep(10)
+        except Exception as e:
+            logger.error("V2EX AI API 非预期异常: %s", e)
+            break
 
     return None

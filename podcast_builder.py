@@ -16,8 +16,9 @@ from pathlib import Path
 import requests
 
 from config import (
+    AI_API_KEY,
     AI_API_URL,
-    GITHUB_TOKEN,
+    AI_APP_NAME,
     OUTPUT_ARCHIVE_DIR,
     PODCAST_ENABLED,
     PODCAST_EXCLUDED_SOURCE_IDS,
@@ -301,11 +302,11 @@ def _parse_source_id_list(value):
 
 
 def build_podcast_script(date_text, snapshots):
-    """调用 GitHub Models，把归档资讯生成男女对话脚本。"""
-    if PODCAST_SCRIPT_PROVIDER != "github_models":
+    """调用 OpenRouter，把归档资讯生成男女对话脚本。"""
+    if PODCAST_SCRIPT_PROVIDER != "openrouter":
         raise ValueError("暂不支持的播客脚本 provider: {}".format(PODCAST_SCRIPT_PROVIDER))
-    if not GITHUB_TOKEN:
-        raise RuntimeError("未配置 GITHUB_TOKEN，无法生成播客脚本")
+    if not AI_API_KEY:
+        raise RuntimeError("未配置 AI_API_KEY，无法生成播客脚本")
 
     prompt = _build_script_prompt(date_text, snapshots)
     payload = _call_script_ai_api(prompt)
@@ -387,9 +388,11 @@ def _build_script_prompt(date_text, snapshots):
 
 def _call_script_ai_api(prompt):
     headers = {
-        "Authorization": "Bearer {}".format(GITHUB_TOKEN),
+        "Authorization": "Bearer {}".format(AI_API_KEY),
         "Content-Type": "application/json",
     }
+    if AI_APP_NAME:
+        headers["X-Title"] = AI_APP_NAME
     payload = {
         "model": PODCAST_SCRIPT_MODEL,
         "messages": [
@@ -401,6 +404,8 @@ def _call_script_ai_api(prompt):
         ],
         "temperature": 0.4,
         "max_tokens": 6000,
+        "reasoning": {"enabled": False},
+        "response_format": {"type": "json_object"},
     }
     url = "{}/chat/completions".format(AI_API_URL)
     max_retries = max(1, PODCAST_SCRIPT_MAX_RETRIES)
@@ -420,9 +425,18 @@ def _call_script_ai_api(prompt):
                     attempt,
                     max_retries,
                 )
-                _sleep_before_retry(attempt)
+                retry_after = (
+                    response.headers.get("Retry-After")
+                    if response.status_code == 429
+                    else None
+                )
+                _sleep_before_retry(attempt, retry_after=retry_after)
                 continue
 
+            if response.status_code == 401:
+                logger.error("[播客] OpenRouter 鉴权失败，请检查 AI_API_KEY 是否有效")
+            elif response.status_code == 402:
+                logger.error("[播客] OpenRouter 余额或 Key 额度不足，请检查账户额度")
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
             return _parse_json_response(content)
@@ -442,7 +456,7 @@ def _call_script_ai_api(prompt):
 
 
 def _is_retryable_status(status_code):
-    return status_code in (429, 500, 502, 503, 504)
+    return status_code in (408, 429, 500, 502, 503, 504)
 
 
 def _is_retryable_request_error(error):
@@ -456,8 +470,13 @@ def _is_retryable_request_error(error):
     )
 
 
-def _sleep_before_retry(attempt):
+def _sleep_before_retry(attempt, retry_after=None):
     seconds = PODCAST_SCRIPT_RETRY_SECONDS * attempt
+    if retry_after is not None:
+        try:
+            seconds = min(120.0, max(0.0, float(retry_after)))
+        except (TypeError, ValueError):
+            pass
     if seconds > 0:
         time.sleep(seconds)
 

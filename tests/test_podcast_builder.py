@@ -10,11 +10,12 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, ".")
 
 from podcast_builder import (  # noqa: E402
+    build_podcast_script,
     build_timed_chapters,
     _build_script_prompt,
     _call_script_ai_api,
@@ -566,7 +567,10 @@ class TestPodcastBuilder(unittest.TestCase):
                     ]
                 }
 
-        with patch("podcast_builder.PODCAST_SCRIPT_MAX_RETRIES", 2), \
+        with patch("podcast_builder.AI_API_KEY", "openrouter-key"), \
+                patch("podcast_builder.AI_APP_NAME", "每日AI前沿信息"), \
+                patch("podcast_builder.PODCAST_SCRIPT_MODEL", "deepseek/deepseek-v4-flash-0731"), \
+                patch("podcast_builder.PODCAST_SCRIPT_MAX_RETRIES", 2), \
                 patch("podcast_builder.PODCAST_SCRIPT_RETRY_SECONDS", 1), \
                 patch("podcast_builder.time.sleep") as sleep, \
                 patch(
@@ -581,6 +585,68 @@ class TestPodcastBuilder(unittest.TestCase):
         self.assertEqual(payload["turns"][0]["text"], "重试后成功。")
         self.assertEqual(post.call_count, 2)
         sleep.assert_called_once()
+        _, kwargs = post.call_args
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer openrouter-key")
+        self.assertEqual(kwargs["headers"]["X-Title"], "每日AI前沿信息")
+        self.assertEqual(kwargs["json"]["model"], "deepseek/deepseek-v4-flash-0731")
+        self.assertEqual(kwargs["json"]["reasoning"], {"enabled": False})
+        self.assertEqual(kwargs["json"]["response_format"], {"type": "json_object"})
+
+    def test_build_podcast_script_rejects_retired_provider(self):
+        with patch("podcast_builder.PODCAST_SCRIPT_PROVIDER", "github_models"), \
+                self.assertRaisesRegex(ValueError, "暂不支持"):
+            build_podcast_script("2026-08-05", [])
+
+    def test_build_podcast_script_requires_ai_api_key(self):
+        with patch("podcast_builder.PODCAST_SCRIPT_PROVIDER", "openrouter"), \
+                patch("podcast_builder.AI_API_KEY", ""), \
+                self.assertRaisesRegex(RuntimeError, "AI_API_KEY"):
+            build_podcast_script("2026-08-05", [])
+
+    def test_call_script_ai_api_does_not_retry_permanent_error(self):
+        response = requests.Response()
+        response.status_code = 402
+
+        with patch("podcast_builder.PODCAST_SCRIPT_MAX_RETRIES", 5), \
+                patch("podcast_builder.time.sleep") as sleep, \
+                patch("podcast_builder.requests.post", return_value=response) as post, \
+                self.assertRaises(requests.exceptions.HTTPError):
+            _call_script_ai_api("prompt")
+
+        self.assertEqual(post.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_call_script_ai_api_respects_retry_after(self):
+        limited = requests.Response()
+        limited.status_code = 429
+        limited.headers["Retry-After"] = "1.5"
+
+        success = MagicMock()
+        success.status_code = 200
+        success.raise_for_status.return_value = None
+        success.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {"turns": [{"role": "male", "text": "成功"}]}
+                        )
+                    }
+                }
+            ]
+        }
+
+        with patch("podcast_builder.PODCAST_SCRIPT_MAX_RETRIES", 2), \
+                patch("podcast_builder.time.sleep") as sleep, \
+                patch(
+                    "podcast_builder.requests.post",
+                    side_effect=[limited, success],
+                ) as post:
+            payload = _call_script_ai_api("prompt")
+
+        self.assertEqual(payload["turns"][0]["text"], "成功")
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(1.5)
 
 
 if __name__ == "__main__":

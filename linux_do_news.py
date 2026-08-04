@@ -15,9 +15,10 @@ from urllib.parse import urljoin
 import requests
 
 from config import (
+    AI_API_KEY,
+    AI_APP_NAME,
     AI_API_URL,
     AI_MODEL,
-    GITHUB_TOKEN,
     LINUX_DO_MAX_ITEMS,
     LINUX_DO_MAX_RETRIES,
     LINUX_DO_NEWS_URL,
@@ -79,8 +80,8 @@ def ai_summarize_linux_do_items(items):
     if not items:
         return items
 
-    if not GITHUB_TOKEN:
-        logger.warning("未配置 GITHUB_TOKEN，跳过 Linux.do AI 总结")
+    if not AI_API_KEY:
+        logger.warning("未配置 AI_API_KEY，跳过 Linux.do AI 总结")
         for item in items:
             item["ai_summary"] = _fallback_summary(item)
         return items
@@ -137,11 +138,13 @@ def _fallback_summary(item):
 
 
 def _call_linux_do_ai_api(prompt, max_retries=10):
-    """调用 GitHub Models API 进行 Linux.do 摘要。"""
+    """调用 OpenRouter API 进行 Linux.do 摘要。"""
     headers = {
-        "Authorization": "Bearer {}".format(GITHUB_TOKEN),
+        "Authorization": "Bearer {}".format(AI_API_KEY),
         "Content-Type": "application/json",
     }
+    if AI_APP_NAME:
+        headers["X-Title"] = AI_APP_NAME
     payload = {
         "model": AI_MODEL,
         "messages": [
@@ -155,6 +158,8 @@ def _call_linux_do_ai_api(prompt, max_retries=10):
         ],
         "temperature": 0.3,
         "max_tokens": 8000,
+        "reasoning": {"enabled": False},
+        "response_format": {"type": "json_object"},
     }
 
     for attempt in range(max_retries):
@@ -174,21 +179,29 @@ def _call_linux_do_ai_api(prompt, max_retries=10):
             return json.loads(content).get("summaries", [])
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
-            if status == 429:
-                wait = 60 * (attempt + 1)
-                logger.warning("Linux.do 摘要 API 限流，等待 %d 秒后重试...", wait)
-                time.sleep(wait)
-            elif attempt < max_retries - 1:
-                logger.error("Linux.do AI API HTTP 错误 %d: %s", status, e)
-                time.sleep(5 * (attempt + 1))
-            else:
-                logger.error("Linux.do AI API HTTP 错误，已放弃: %s", e)
-        except Exception as e:
+            logger.error("Linux.do AI API HTTP 错误 %d: %s", status, e)
+            if status == 401:
+                logger.error("OpenRouter 鉴权失败，请检查 AI_API_KEY 是否有效")
+            elif status == 402:
+                logger.error("OpenRouter 余额或 Key 额度不足，请检查账户额度")
+            if status not in (408, 429, 500, 502, 503, 504):
+                break
             if attempt < max_retries - 1:
-                logger.error("Linux.do AI 总结调用失败: %s", e)
+                wait = min(60.0, 5.0 * (attempt + 1))
+                if status == 429 and e.response is not None:
+                    try:
+                        wait = min(120.0, max(0.0, float(e.response.headers.get("Retry-After", wait))))
+                    except (TypeError, ValueError):
+                        pass
+                logger.warning("Linux.do AI API 临时失败，等待 %.1f 秒后重试...", wait)
+                time.sleep(wait)
+        except requests.exceptions.RequestException as e:
+            logger.error("Linux.do AI 总结调用失败: %s", e)
+            if attempt < max_retries - 1:
                 time.sleep(5 * (attempt + 1))
-            else:
-                logger.error("Linux.do AI 总结调用失败，已放弃: %s", e)
+        except Exception as e:
+            logger.error("Linux.do AI 总结非预期异常: %s", e)
+            break
 
     return None
 
