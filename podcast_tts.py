@@ -18,6 +18,7 @@ from config import (
     PODCAST_TTS_MAX_RETRIES,
     PODCAST_TTS_PROVIDER,
     PODCAST_TTS_RETRY_SECONDS,
+    PODCAST_TTS_TIMEOUT_SECONDS,
     PODCAST_VOICE_FEMALE_PITCH,
     PODCAST_VOICE_FEMALE_RATE,
     PODCAST_VOICE_FEMALE_VOLUME,
@@ -215,7 +216,15 @@ def _synthesize_edge_segment_once(text, voice, output_path, rate, pitch, volume)
             pitch=pitch,
             volume=volume,
         )
-        await communicate.save(str(output_path))
+        try:
+            await asyncio.wait_for(
+                communicate.save(str(output_path)),
+                timeout=PODCAST_TTS_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise TimeoutError(
+                "edge-tts 合成超时（超过 {:.0f} 秒未返回）".format(PODCAST_TTS_TIMEOUT_SECONDS)
+            )
 
     logger.info("生成播客语音片段: %s", output_path)
     asyncio.run(_run())

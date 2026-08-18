@@ -269,6 +269,8 @@ PODCAST_TOPIC_PAUSE_SECONDS = float(os.environ.get("PODCAST_TOPIC_PAUSE_SECONDS"
 PODCAST_CHAPTER_PAUSE_SECONDS = float(os.environ.get("PODCAST_CHAPTER_PAUSE_SECONDS", "1.6"))
 PODCAST_TTS_MAX_RETRIES = int(os.environ.get("PODCAST_TTS_MAX_RETRIES", "3"))
 PODCAST_TTS_RETRY_SECONDS = float(os.environ.get("PODCAST_TTS_RETRY_SECONDS", "3"))
+# edge-tts 单段语音合成超时时间，防止网络异常导致 WebSocket 连接挂起不返回、调度线程永久阻塞。
+PODCAST_TTS_TIMEOUT_SECONDS = float(os.environ.get("PODCAST_TTS_TIMEOUT_SECONDS", "45"))
 
 # 控制脚本长度，目标生成 5-8 分钟音频。
 PODCAST_MIN_DURATION_MINUTES = int(os.environ.get("PODCAST_MIN_DURATION_MINUTES", "4"))
