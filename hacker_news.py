@@ -26,6 +26,7 @@ from config import (
     HN_CONCURRENT_WORKERS,
     HN_MAX_RETRIES,
     HN_TOP_COUNT,
+    SPIDER_REQUEST_PROXIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def _fetch_top_story_ids(max_retries):
     for attempt in range(max_retries):
         try:
             logger.info("正在获取 HN Top Stories (第 %d 次尝试)", attempt + 1)
-            resp = requests.get(url, timeout=30)
+            resp = requests.get(url, timeout=30, proxies=SPIDER_REQUEST_PROXIES)
             resp.raise_for_status()
             ids = resp.json()
             if isinstance(ids, list):
@@ -139,7 +140,7 @@ def _fetch_item(item_id):
     """获取单个 HN item（story 或 comment）。"""
     url = "{}/item/{}.json".format(HN_API_BASE, item_id)
     try:
-        resp = requests.get(url, timeout=15)
+        resp = requests.get(url, timeout=15, proxies=SPIDER_REQUEST_PROXIES)
         resp.raise_for_status()
         return resp.json()
     except requests.RequestException as e:

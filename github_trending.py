@@ -27,6 +27,7 @@ from config import (
     AI_REQUEST_PROXIES,
     AI_API_URL,
     GITHUB_TRENDING_TOP_COUNT,
+    SPIDER_REQUEST_PROXIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def fetch_trending(since="daily", max_retries=10, count=None):
     for attempt in range(max_retries):
         try:
             logger.info("正在爬取 %s (第 %d 次尝试)", url, attempt + 1)
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = requests.get(url, headers=HEADERS, timeout=30, proxies=SPIDER_REQUEST_PROXIES)
             resp.raise_for_status()
             break
         except requests.RequestException as e:

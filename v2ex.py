@@ -19,6 +19,7 @@ from config import (
     AI_API_URL,
     AI_MODEL,
     AI_REQUEST_PROXIES,
+    SPIDER_REQUEST_PROXIES,
     V2EX_API_BASE,
     V2EX_MAX_RETRIES,
     V2EX_REPLIES_PER_TOPIC,
@@ -76,7 +77,7 @@ def fetch_v2ex_hot_topics(count=None, max_retries=None):
     for attempt in range(max_retries):
         try:
             logger.info("正在获取 V2EX 全站热帖 (第 %d 次尝试)", attempt + 1)
-            resp = requests.get(url, timeout=30)
+            resp = requests.get(url, timeout=30, proxies=SPIDER_REQUEST_PROXIES)
             resp.raise_for_status()
             topics = resp.json()
 
@@ -133,7 +134,7 @@ def fetch_topic_replies(topics, replies_per_topic=None):
         url = "{}/replies/show.json?topic_id={}".format(V2EX_API_BASE, topic_id)
         try:
             time.sleep(V2EX_REQUEST_INTERVAL)
-            resp = requests.get(url, timeout=15)
+            resp = requests.get(url, timeout=15, proxies=SPIDER_REQUEST_PROXIES)
 
             if resp.status_code == 403:
                 logger.warning("V2EX 限流(403)，跳过剩余帖子回复获取")

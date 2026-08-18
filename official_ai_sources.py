@@ -23,6 +23,7 @@ from config import (
     OPENAI_NEWS_COUNT,
     OPENAI_NEWS_RSS_URL,
     OPENAI_NEWS_URL,
+    SPIDER_REQUEST_PROXIES,
 )
 from content_items import (
     CATEGORY_AI_ENGINEERING,
@@ -114,7 +115,7 @@ def _fetch_text(url, max_retries):
     for attempt in range(max_retries):
         try:
             logger.info("正在获取官方 AI 信息源 %s (第 %d 次尝试)", url, attempt + 1)
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = requests.get(url, headers=HEADERS, timeout=30, proxies=SPIDER_REQUEST_PROXIES)
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:

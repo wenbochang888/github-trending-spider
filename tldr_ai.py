@@ -21,6 +21,7 @@ from config import (
     AI_API_URL,
     AI_MODEL,
     AI_REQUEST_PROXIES,
+    SPIDER_REQUEST_PROXIES,
     TLDR_AI_HOME_URL,
     TLDR_AI_MAX_RETRIES,
     TLDR_AI_TOP_COUNT,
@@ -93,7 +94,7 @@ def _fetch_html(url, max_retries):
     for attempt in range(max_retries):
         try:
             logger.info("正在获取 TLDR AI 页面 %s (第 %d 次尝试)", url, attempt + 1)
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = requests.get(url, headers=HEADERS, timeout=30, proxies=SPIDER_REQUEST_PROXIES)
             resp.raise_for_status()
             return resp.text
         except requests.RequestException as e:

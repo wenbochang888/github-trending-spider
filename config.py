@@ -58,6 +58,17 @@ AI_API_URL = os.environ.get(
 AI_MODEL = os.environ.get("AI_MODEL", "deepseek/deepseek-v4-flash-0731")
 
 # =========================================================================
+# 各信息源抓取代理配置
+# =========================================================================
+# 服务器出口网络访问境外站点（github/hn/v2ex/tldr/openai/anthropic/infoq 等）
+# 偶发不稳定，可通过本地 mihomo/clash 等代理软件转发。默认关闭，需显式开启。
+SPIDER_USE_PROXY = _get_bool_env("SPIDER_USE_PROXY", False)
+SPIDER_PROXY_URL = os.environ.get("SPIDER_PROXY_URL", "http://127.0.0.1:7890")
+SPIDER_REQUEST_PROXIES = (
+    {"http": SPIDER_PROXY_URL, "https": SPIDER_PROXY_URL} if SPIDER_USE_PROXY else None
+)
+
+# =========================================================================
 # GitHub Trending 配置
 # =========================================================================
 
