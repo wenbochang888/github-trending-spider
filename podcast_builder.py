@@ -27,6 +27,8 @@ from config import (
     PODCAST_MIN_DURATION_MINUTES,
     PODCAST_MIN_SCRIPT_CHARS,
     PODCAST_MIN_TURN_COUNT,
+    PODCAST_RUN_MAX_ATTEMPTS,
+    PODCAST_RUN_RETRY_SECONDS,
     PODCAST_SCRIPT_MAX_RETRIES,
     PODCAST_SCRIPT_MODEL,
     PODCAST_SCRIPT_PROVIDER,
@@ -65,6 +67,38 @@ def resolve_target_content_date(run_at=None, mode=PODCAST_TARGET_DATE_MODE):
     return (run_at.date() - timedelta(days=1)).isoformat()
 
 
+def _synthesize_podcast_with_retry(date_text, script, output_dir):
+    """TTS 阶段整体重试。
+
+    单段多次重试仍失败时（如 edge-tts 间歇性 No audio was received），
+    等待一段时间后重跑整个 TTS 流程；已合成片段会被复用，只补缺失片段。
+    """
+    turns = script.get("turns", [])
+    target_dir = podcast_dir(date_text, output_dir)
+    for attempt in range(1, PODCAST_RUN_MAX_ATTEMPTS + 1):
+        try:
+            return synthesize_podcast(turns, target_dir)
+        except Exception as e:
+            if attempt >= PODCAST_RUN_MAX_ATTEMPTS:
+                logger.exception(
+                    "[播客] %s TTS 合成最终失败 | attempts=%d | error=%s",
+                    date_text,
+                    attempt,
+                    e,
+                )
+                raise
+            logger.warning(
+                "[播客] %s TTS 合成失败，%.0f 秒后整体重试 | attempt=%d/%d | error=%s",
+                date_text,
+                PODCAST_RUN_RETRY_SECONDS,
+                attempt,
+                PODCAST_RUN_MAX_ATTEMPTS,
+                e,
+            )
+            time.sleep(PODCAST_RUN_RETRY_SECONDS)
+    raise RuntimeError("TTS 合成重试次数已用尽")
+
+
 def run_podcast_generation(scheduled_time=None, output_dir=OUTPUT_ARCHIVE_DIR):
     """执行一次每日播客生成任务。"""
     if not PODCAST_ENABLED:
@@ -99,7 +133,7 @@ def run_podcast_generation(scheduled_time=None, output_dir=OUTPUT_ARCHIVE_DIR):
                 script = retry_script
             write_podcast_script(date_text, script, output_dir)
 
-        tts_result = synthesize_podcast(script.get("turns", []), podcast_dir(date_text, output_dir))
+        tts_result = _synthesize_podcast_with_retry(date_text, script, output_dir)
         duration_seconds = tts_result.get("duration_seconds", 0)
         if duration_seconds and duration_seconds < PODCAST_MIN_DURATION_MINUTES * 60:
             logger.warning(

@@ -142,6 +142,77 @@ class TestPodcastBuilder(unittest.TestCase):
             self.assertEqual(metadata["source_count"], 1)
             self.assertEqual(metadata["item_count"], 1)
 
+    def test_tts_failure_retries_whole_stage_then_succeeds(self):
+        """TTS 整体重试：首次失败后等待并重跑，成功后照常写 success 元数据。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_archive(temp_dir)
+            script = {
+                "title": "2026-07-19 AI 音频日报",
+                "summary": "热点摘要。",
+                "chapters": [{"time": "00:00", "title": "今日主线"}],
+                "turns": [{"role": "male", "text": "今天先看开源热榜。"}],
+            }
+            attempts = {"count": 0}
+
+            def fail_then_succeed(turns, target_dir):
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise RuntimeError("No audio was received. Please verify that your parameters are correct.")
+                return {"duration_seconds": 123}
+
+            with patch("podcast_builder.PODCAST_ENABLED", True), \
+                    patch("podcast_builder.PODCAST_MIN_TURN_COUNT", 1), \
+                    patch("podcast_builder.PODCAST_MIN_SCRIPT_CHARS", 1), \
+                    patch("podcast_builder.PODCAST_RUN_MAX_ATTEMPTS", 3), \
+                    patch("podcast_builder.PODCAST_RUN_RETRY_SECONDS", 300), \
+                    patch("podcast_builder.build_podcast_script", return_value=script), \
+                    patch("podcast_builder.synthesize_podcast", side_effect=fail_then_succeed) as synthesize, \
+                    patch("podcast_builder.time.sleep") as sleep:
+                result = run_podcast_generation(
+                    scheduled_time=datetime(2026, 7, 20, 2, 30, 0),
+                    output_dir=temp_dir,
+                )
+
+            metadata = load_podcast_metadata("2026-07-19", output_dir=temp_dir)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(metadata["status"], "success")
+            self.assertEqual(synthesize.call_count, 2)
+            sleep.assert_called_once_with(300)
+
+    def test_tts_failure_exhausts_retries_writes_failed_metadata(self):
+        """TTS 整体重试用尽后写 failed 元数据，不再无限重试。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_archive(temp_dir)
+            script = {
+                "title": "2026-07-19 AI 音频日报",
+                "summary": "热点摘要。",
+                "chapters": [{"time": "00:00", "title": "今日主线"}],
+                "turns": [{"role": "male", "text": "今天先看开源热榜。"}],
+            }
+
+            with patch("podcast_builder.PODCAST_ENABLED", True), \
+                    patch("podcast_builder.PODCAST_MIN_TURN_COUNT", 1), \
+                    patch("podcast_builder.PODCAST_MIN_SCRIPT_CHARS", 1), \
+                    patch("podcast_builder.PODCAST_RUN_MAX_ATTEMPTS", 2), \
+                    patch("podcast_builder.PODCAST_RUN_RETRY_SECONDS", 300), \
+                    patch("podcast_builder.build_podcast_script", return_value=script), \
+                    patch(
+                        "podcast_builder.synthesize_podcast",
+                        side_effect=RuntimeError("No audio was received."),
+                    ) as synthesize, \
+                    patch("podcast_builder.time.sleep") as sleep:
+                result = run_podcast_generation(
+                    scheduled_time=datetime(2026, 7, 20, 2, 30, 0),
+                    output_dir=temp_dir,
+                )
+
+            metadata = load_podcast_metadata("2026-07-19", output_dir=temp_dir)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(metadata["status"], "failed")
+            self.assertIn("No audio was received", metadata["error"])
+            self.assertEqual(synthesize.call_count, 2)
+            self.assertEqual(sleep.call_count, 1)
+
     def test_normalize_script_payload_accepts_missing_summary(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_archive(temp_dir)

@@ -278,10 +278,22 @@ PODCAST_VOICE_FEMALE_VOLUME = os.environ.get("PODCAST_VOICE_FEMALE_VOLUME", "+0%
 PODCAST_TURN_PAUSE_SECONDS = float(os.environ.get("PODCAST_TURN_PAUSE_SECONDS", "0.8"))
 PODCAST_TOPIC_PAUSE_SECONDS = float(os.environ.get("PODCAST_TOPIC_PAUSE_SECONDS", "1.1"))
 PODCAST_CHAPTER_PAUSE_SECONDS = float(os.environ.get("PODCAST_CHAPTER_PAUSE_SECONDS", "1.6"))
-PODCAST_TTS_MAX_RETRIES = int(os.environ.get("PODCAST_TTS_MAX_RETRIES", "3"))
+PODCAST_TTS_MAX_RETRIES = int(os.environ.get("PODCAST_TTS_MAX_RETRIES", "5"))
 PODCAST_TTS_RETRY_SECONDS = float(os.environ.get("PODCAST_TTS_RETRY_SECONDS", "3"))
 # edge-tts 单段语音合成超时时间，防止网络异常导致 WebSocket 连接挂起不返回、调度线程永久阻塞。
 PODCAST_TTS_TIMEOUT_SECONDS = float(os.environ.get("PODCAST_TTS_TIMEOUT_SECONDS", "45"))
+# ffprobe / ffmpeg 等本地子进程超时时间，防止本地工具挂起阻塞任务。
+PODCAST_SUBPROCESS_TIMEOUT_SECONDS = float(
+    os.environ.get("PODCAST_SUBPROCESS_TIMEOUT_SECONDS", "120")
+)
+# TTS 阶段整体重试：单个片段多次重试仍失败时，等待一段时间后重跑整个 TTS 流程。
+# 已合成片段会被复用，重试只补缺失片段。
+PODCAST_RUN_MAX_ATTEMPTS = int(os.environ.get("PODCAST_RUN_MAX_ATTEMPTS", "3"))
+PODCAST_RUN_RETRY_SECONDS = float(os.environ.get("PODCAST_RUN_RETRY_SECONDS", "300"))
+# 播客任务运行超过该时长仍未结束，调度器打 ERROR 告警（无法安全强杀线程，只告警）。
+PODCAST_RUN_STALE_WARN_SECONDS = float(
+    os.environ.get("PODCAST_RUN_STALE_WARN_SECONDS", "7200")
+)
 
 # 控制脚本长度，目标生成 5-8 分钟音频。
 PODCAST_MIN_DURATION_MINUTES = int(os.environ.get("PODCAST_MIN_DURATION_MINUTES", "4"))

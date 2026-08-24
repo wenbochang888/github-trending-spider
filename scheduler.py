@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from config import (
     PODCAST_ENABLED,
+    PODCAST_RUN_STALE_WARN_SECONDS,
     PODCAST_SCHEDULE_TIME,
     SPIDER_RUN_ON_STARTUP,
     SPIDER_SCHEDULE_TIMES,
@@ -25,6 +26,7 @@ _podcast_scheduler_thread = None
 _stop_event = threading.Event()
 _run_lock = threading.Lock()
 _podcast_run_lock = threading.Lock()
+_podcast_run_started_at = None
 
 
 def parse_schedule_times(value):
@@ -118,11 +120,11 @@ def trigger_spider_async(reason):
     return thread
 
 
-def trigger_podcast_async(reason):
+def trigger_podcast_async(reason, scheduled_time=None):
     """异步触发一次播客生成。"""
     thread = threading.Thread(
         target=_run_podcast_with_lock,
-        args=(reason,),
+        args=(reason, scheduled_time),
         name="podcast-runner",
         daemon=True,
     )
@@ -141,13 +143,37 @@ def _scheduler_loop(schedule_times):
 
 
 def _podcast_scheduler_loop(schedule_times):
+    """播客调度循环：只负责触发，不等待任务结束。
+
+    生成任务在独立 runner 线程执行。即使 runner 因网络异常挂死，
+    调度循环也能继续运行并每天输出"任务运行中"告警，避免 2026-08-08
+    那种调度线程被同步阻塞 10 天、无任何日志的情况。
+    """
     while not _stop_event.is_set():
         next_run_at = _next_run_time(datetime.now(), schedule_times)
         wait_seconds = max(1, int((next_run_at - datetime.now()).total_seconds()))
         logger.info("下一次每日播客生成时间: %s", next_run_at.isoformat(timespec="seconds"))
         if _stop_event.wait(wait_seconds):
             break
-        _run_podcast_with_lock("schedule", next_run_at)
+        _warn_if_podcast_run_stale()
+        trigger_podcast_async("schedule", next_run_at)
+
+
+def _warn_if_podcast_run_stale():
+    """检测上一轮播客任务是否疑似挂死，超过阈值打 ERROR 告警。"""
+    global _podcast_run_started_at
+
+    started_at = _podcast_run_started_at
+    if started_at is None:
+        return
+    elapsed = (datetime.now() - started_at).total_seconds()
+    if elapsed > PODCAST_RUN_STALE_WARN_SECONDS:
+        logger.error(
+            "播客生成任务疑似挂死：已运行 %.0f 秒（阈值 %.0f 秒）仍未结束，"
+            "本轮调度触发将被锁拒绝；如持续出现请重启服务",
+            elapsed,
+            PODCAST_RUN_STALE_WARN_SECONDS,
+        )
 
 
 def _run_spider_with_lock(reason, scheduled_time=None):
@@ -168,11 +194,14 @@ def _run_spider_with_lock(reason, scheduled_time=None):
 
 
 def _run_podcast_with_lock(reason, scheduled_time=None):
+    global _podcast_run_started_at
+
     if not _podcast_run_lock.acquire(blocking=False):
         logger.warning("已有播客生成任务运行中，跳过本次触发: %s", reason)
         return False
 
     try:
+        _podcast_run_started_at = datetime.now()
         logger.info("开始执行每日播客生成任务: %s", reason)
         from podcast_builder import run_podcast_generation
 
@@ -182,6 +211,7 @@ def _run_podcast_with_lock(reason, scheduled_time=None):
         logger.exception("每日播客生成任务异常: %s", e)
         return False
     finally:
+        _podcast_run_started_at = None
         _podcast_run_lock.release()
 
 

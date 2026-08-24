@@ -19,6 +19,7 @@ from config import (
     PODCAST_TTS_PROVIDER,
     PODCAST_TTS_RETRY_SECONDS,
     PODCAST_TTS_TIMEOUT_SECONDS,
+    PODCAST_SUBPROCESS_TIMEOUT_SECONDS,
     PODCAST_VOICE_FEMALE_PITCH,
     PODCAST_VOICE_FEMALE_RATE,
     PODCAST_VOICE_FEMALE_VOLUME,
@@ -40,6 +41,7 @@ PODCAST_SILENCE_BITRATE = "48k"
 PODCAST_OUTPUT_BITRATE = "128k"
 MERGED_DURATION_TOLERANCE_RATIO = 0.02
 MERGED_DURATION_TOLERANCE_MIN_SECONDS = 1.0
+TTS_RETRY_BACKOFF_MAX_SECONDS = 60.0
 
 
 def synthesize_podcast(turns, target_dir):
@@ -84,9 +86,12 @@ def _collect_segment_infos(turns, segments_dir, synthesize):
             continue
         segment_path = segments_dir / "{:03d}-{}.mp3".format(index, role or "speaker")
         if synthesize:
-            voice = _voice_for_role(role)
-            voice_options = _voice_options_for_role(role)
-            _synthesize_edge_segment(text, voice, segment_path, **voice_options)
+            if _is_reusable_segment(segment_path):
+                logger.info("复用已有播客语音片段: %s", segment_path)
+            else:
+                voice = _voice_for_role(role)
+                voice_options = _voice_options_for_role(role)
+                _synthesize_edge_segment(text, voice, segment_path, **voice_options)
         elif not segment_path.exists() or segment_path.stat().st_size == 0:
             raise FileNotFoundError("播客语音片段不存在或为空: {}".format(segment_path))
 
@@ -118,6 +123,20 @@ def _merge_podcast_segments(segment_infos, target_dir):
         "duration_seconds": int(duration_seconds),
         "turn_timeline": timeline,
     }
+
+
+def _is_reusable_segment(segment_path):
+    """判断已有片段是否可直接复用：文件存在、非空且能读出有效时长。
+
+    失败片段会被 _remove_empty_or_partial_file 清理，损坏片段读不出时长，
+    二者都会被重新合成，因此复用判定是安全的。
+    """
+    try:
+        if not segment_path.exists() or segment_path.stat().st_size == 0:
+            return False
+        return _probe_duration_seconds_float(segment_path) > 0
+    except OSError:
+        return False
 
 
 def _voice_for_role(role):
@@ -238,7 +257,14 @@ def _remove_empty_or_partial_file(path):
 
 
 def _sleep_before_tts_retry(attempt):
-    seconds = PODCAST_TTS_RETRY_SECONDS * attempt
+    """单段 TTS 重试前的指数退避：3s/6s/12s/24s/48s...，上限 60s。
+
+    线性短间隔（原 3s/6s/9s）容易整体落在同一个故障窗口内，导致连续重试全部失败。
+    """
+    seconds = min(
+        PODCAST_TTS_RETRY_SECONDS * (2 ** max(0, attempt - 1)),
+        TTS_RETRY_BACKOFF_MAX_SECONDS,
+    )
     if seconds > 0:
         time.sleep(seconds)
 
@@ -283,7 +309,13 @@ def _merge_segments(segment_infos, output_path):
     ]
     logger.info("合并播客音频: %s", output_path)
     try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=PODCAST_SUBPROCESS_TIMEOUT_SECONDS,
+        )
         actual_duration = _probe_duration_seconds_float(raw_output_path)
         _validate_merged_duration(expected_duration, actual_duration)
         raw_output_path.replace(output_path)
@@ -432,7 +464,13 @@ def _ensure_silence_segment(output_path, duration_seconds):
         str(output_path),
     ]
     logger.info("生成播客转场静音: %s", output_path)
-    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=PODCAST_SUBPROCESS_TIMEOUT_SECONDS,
+    )
 
 
 def _probe_duration_seconds_float(audio_path):
@@ -456,6 +494,7 @@ def _probe_duration_seconds_float(audio_path):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=PODCAST_SUBPROCESS_TIMEOUT_SECONDS,
         )
         return float(result.stdout.strip() or "0")
     except Exception as e:

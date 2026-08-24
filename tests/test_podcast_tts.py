@@ -15,6 +15,7 @@ sys.path.insert(0, ".")
 
 from podcast_tts import (  # noqa: E402
     _ensure_silence_segment,
+    _is_reusable_segment,
     _merge_segments,
     _merge_paths_and_timeline,
     _normalize_edge_tts_signed_value,
@@ -22,6 +23,7 @@ from podcast_tts import (  # noqa: E402
     _probe_duration_seconds_float,
     _prepare_tts_text,
     _segment_paths_with_turn_pause,
+    _sleep_before_tts_retry,
     _synthesize_edge_segment,
     merge_existing_podcast,
     synthesize_podcast,
@@ -340,6 +342,68 @@ class TestPodcastTts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(ValueError):
                 synthesize_podcast([], temp_dir)
+
+    def test_synthesize_podcast_reuses_existing_segments(self):
+        """断点续传：已存在且有效的片段直接复用，只补缺失片段。"""
+        turns = [
+            {"role": "male", "text": "已有片段的台词"},
+            {"role": "female", "text": "缺失片段的台词"},
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            segments_dir = Path(temp_dir) / "segments"
+            segments_dir.mkdir()
+            (segments_dir / "001-male.mp3").write_bytes(b"existing-mp3")
+
+            with patch("podcast_tts.PODCAST_TTS_PROVIDER", "edge_tts"), \
+                    patch("podcast_tts._synthesize_edge_segment") as synthesize, \
+                    patch("podcast_tts._merge_segments", return_value=([], 123)), \
+                    patch("podcast_tts._probe_duration_seconds_float", return_value=1.0):
+                result = synthesize_podcast(turns, temp_dir)
+
+        self.assertEqual(result["duration_seconds"], 123)
+        synthesize.assert_called_once()
+        self.assertIn("002-female.mp3", str(synthesize.call_args.args[2]))
+
+    def test_is_reusable_segment_rejects_empty_or_unreadable_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir)
+            empty_path = target_dir / "001-male.mp3"
+            empty_path.write_bytes(b"")
+            broken_path = target_dir / "002-female.mp3"
+            broken_path.write_bytes(b"not-audio")
+
+            with patch(
+                "podcast_tts._probe_duration_seconds_float",
+                side_effect=lambda path: 0.0 if path == broken_path else 1.5,
+            ):
+                self.assertFalse(_is_reusable_segment(empty_path))
+                self.assertFalse(_is_reusable_segment(broken_path))
+                self.assertFalse(_is_reusable_segment(target_dir / "003-male.mp3"))
+                valid_path = target_dir / "004-female.mp3"
+                valid_path.write_bytes(b"mp3")
+                self.assertTrue(_is_reusable_segment(valid_path))
+
+    def test_tts_retry_backoff_is_exponential_with_cap(self):
+        """单段重试指数退避：3s/6s/12s/24s/48s...，上限 60s。"""
+        sleeps = []
+
+        with patch("podcast_tts.PODCAST_TTS_RETRY_SECONDS", 3), \
+                patch("podcast_tts.time.sleep", side_effect=sleeps.append):
+            for attempt in range(1, 8):
+                _sleep_before_tts_retry(attempt)
+
+        self.assertEqual(sleeps, [3, 6, 12, 24, 48, 60, 60])
+
+    def test_subprocess_calls_have_timeout(self):
+        """ffprobe / ffmpeg 子进程调用必须带超时，防止本地工具挂起阻塞任务。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "pause-0800ms.mp3"
+            with patch("podcast_tts.subprocess.run") as run:
+                _ensure_silence_segment(output_path, 0.8)
+
+            self.assertIn("timeout", run.call_args.kwargs)
+            self.assertGreater(run.call_args.kwargs["timeout"], 0)
 
 
 if __name__ == "__main__":
