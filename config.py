@@ -43,10 +43,22 @@ AI_API_KEY = os.environ.get("AI_API_KEY", "")
 # OpenRouter 可选应用标题请求头，用于控制台归因。
 AI_APP_NAME = _get_http_header_env("AI_APP_NAME", "AI Daily Frontier")
 
-# 默认仅让 OpenRouter 请求绕过系统代理，避免失效代理阻断全部 AI 摘要。
+# 抓取代理（供 AI 与各信息源共用）。服务器出口访问境外站点偶发不稳定，
+# 可通过本地 mihomo/clash 转发。默认关闭，需显式开启。
+SPIDER_USE_PROXY = _get_bool_env("SPIDER_USE_PROXY", False)
+SPIDER_PROXY_URL = os.environ.get("SPIDER_PROXY_URL", "http://127.0.0.1:7890")
+SPIDER_REQUEST_PROXIES = (
+    {"http": SPIDER_PROXY_URL, "https": SPIDER_PROXY_URL} if SPIDER_USE_PROXY else None
+)
+
+# AI API 代理。境内 IP 直连 OpenRouter 会被拒（400 "Request path cannot be relayed"），
+# 因此当开启抓取代理（SPIDER_USE_PROXY=true）时，AI 请求复用同一代理；
+# 否则维持原行为：AI_BYPASS_PROXY=true 时绕过系统代理直连。
 AI_BYPASS_PROXY = _get_bool_env("AI_BYPASS_PROXY", True)
 AI_REQUEST_PROXIES = (
-    {"http": "", "https": "", "all": ""} if AI_BYPASS_PROXY else None
+    SPIDER_REQUEST_PROXIES
+    if SPIDER_USE_PROXY
+    else ({"http": "", "https": "", "all": ""} if AI_BYPASS_PROXY else None)
 )
 
 # OpenRouter API 基础地址（OpenAI 兼容接口）
@@ -56,17 +68,6 @@ AI_API_URL = os.environ.get(
 
 # 固定模型 ID，避免 latest 别名静默切换版本。
 AI_MODEL = os.environ.get("AI_MODEL", "deepseek/deepseek-v4-flash-0731")
-
-# =========================================================================
-# 各信息源抓取代理配置
-# =========================================================================
-# 服务器出口网络访问境外站点（github/hn/v2ex/tldr/openai/anthropic/infoq 等）
-# 偶发不稳定，可通过本地 mihomo/clash 等代理软件转发。默认关闭，需显式开启。
-SPIDER_USE_PROXY = _get_bool_env("SPIDER_USE_PROXY", False)
-SPIDER_PROXY_URL = os.environ.get("SPIDER_PROXY_URL", "http://127.0.0.1:7890")
-SPIDER_REQUEST_PROXIES = (
-    {"http": SPIDER_PROXY_URL, "https": SPIDER_PROXY_URL} if SPIDER_USE_PROXY else None
-)
 
 # =========================================================================
 # GitHub Trending 配置
